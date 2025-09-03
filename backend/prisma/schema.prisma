@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductType { FISIK DIGITAL }
+enum Unit { PCS PAK KG LITER OTHER }
+enum StockMoveType { IN OUT ADJUST }
+enum PurchaseStatus { DRAFT ORDERED RECEIVED PARTIAL CANCELED }
+enum DigitalTrxStatus { PENDING PROCESSING SUCCESS FAILED TIMEOUT REFUNDED DISPUTE }
+
+model ProductCategory {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  products    Product[]
+}
+
+model TaxRate {
+  id        String   @id @default(uuid())
+  name      String
+  percent   Int      @default(0)
+  isActive  Boolean  @default(true)
+}
+
+model Product {
+  id           String       @id @default(uuid())
+  categoryId   String
+  code         String       @unique
+  barcode      String?      @unique
+  name         String
+  type         ProductType  @default(FISIK)
+  unit         Unit         @default(PCS)
+  trackStock   Boolean      @default(true)
+  costPrice    BigInt       @default(0)
+  sellPrice    BigInt       @default(0)
+  margin       BigInt       @default(0)
+  taxRateId    String?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  category     ProductCategory @relation(fields: [categoryId], references: [id])
+  taxRate      TaxRate?        @relation(fields: [taxRateId], references: [id])
+  stockAgg     Stock[]
+  stockLedger  StockLedger[]
+}
+
+model Stock {
+  storeId   String
+  productId String
+  qty       Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@id([storeId, productId])
+}
+
+model StockLedger {
+  id        String        @id @default(uuid())
+  storeId   String
+  productId String
+  moveType  StockMoveType
+  qty       Int
+  refType   String
+  refId     String?
+  note      String?
+  createdAt DateTime      @default(now())
+
+  @@index([storeId, productId, createdAt])
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  purchases Purchase[]
+}
+
+model Purchase {
+  id         String         @id @default(uuid())
+  number     String         @unique
+  supplierId String
+  storeId    String
+  status     PurchaseStatus @default(DRAFT)
+  subTotal   BigInt         @default(0)
+  discount   BigInt         @default(0)
+  tax        BigInt         @default(0)
+  grandTotal BigInt         @default(0)
+  note       String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  items      PurchaseItem[]
+}
+
+model PurchaseItem {
+  id          String   @id @default(uuid())
+  purchaseId  String
+  productId   String
+  qty         Int
+  costPrice   BigInt
+  total       BigInt
+  note        String?
+}
+
+model DigitalTransaction {
+  id          String   @id @default(uuid())
+  invoiceId   String   @unique
+  supplierRef String?
+  productCode String
+  productName String
+  target      String
+  sellPrice   BigInt
+  status      DigitalTrxStatus @default(PENDING)
+  requestRaw  Json?
+  responseRaw Json?
+  errorCode   String?
+  errorMessage String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+}
+
+model CallbackLog {
+  id         String   @id @default(uuid())
+  source     String
+  ref        String?
+  payload    Json
+  validSig   Boolean
+  receivedAt DateTime @default(now())
+}
